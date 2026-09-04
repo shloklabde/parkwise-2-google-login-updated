@@ -1,0 +1,6 @@
+{
+  "name": "Parkwise",
+  "description": "Smart parking reservation and real-time slot management platform with IoT monitoring and operator controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

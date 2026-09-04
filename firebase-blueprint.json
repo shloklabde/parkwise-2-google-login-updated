@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role, email, phone and vehicle info",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "phone": { "type": "string" },
+        "vehicle": { "type": "string" },
+        "joined": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "ParkingLocation": {
+      "title": "ParkingLocation",
+      "description": "Parking facility details and pricing",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "city": { "type": "string" },
+        "hourlyRate": { "type": "number" },
+        "totalSlots": { "type": "number" },
+        "availableSlots": { "type": "number" },
+        "rating": { "type": "number" },
+        "image": { "type": "string" },
+        "amenities": { "type": "string" }
+      },
+      "required": ["name", "address"]
+    },
+    "ParkingSlot": {
+      "title": "ParkingSlot",
+      "description": "Real-time parking slot sensor status and reservation details",
+      "type": "object",
+      "properties": {
+        "slotNumber": { "type": "string" },
+        "locationId": { "type": "string" },
+        "status": { "type": "string", "enum": ["available", "occupied", "reserved", "maintenance"] },
+        "floor": { "type": "string" },
+        "section": { "type": "string" },
+        "vehicleType": { "type": "string" },
+        "sensorId": { "type": "string" },
+        "reservedBy": { "type": "string" },
+        "reservedAt": { "type": "string" },
+        "lastUpdated": { "type": "string" }
+      },
+      "required": ["slotNumber", "locationId", "status"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Parking reservation details for user or walk-in",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userName": { "type": "string" },
+        "locationId": { "type": "string" },
+        "locationName": { "type": "string" },
+        "address": { "type": "string" },
+        "slotId": { "type": "string" },
+        "slotNumber": { "type": "string" },
+        "date": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "time": { "type": "string" },
+        "duration": { "type": "number" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["confirmed", "active", "completed", "cancelled", "upcoming"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "locationId", "slotNumber", "amount", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/parkingLocation/{locationId}": {
+      "schema": "ParkingLocation",
+      "description": "Parking locations collection"
+    },
+    "/ParkingSlots/{slotId}": {
+      "schema": "ParkingSlot",
+      "description": "Real-time parking slots collection"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "User parking reservations"
+    }
+  }
+}
