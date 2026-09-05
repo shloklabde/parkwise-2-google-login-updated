@@ -128,6 +128,20 @@ export const OlaMap: React.FC<OlaMapProps> = ({
         }
       }
 
+      let fellBack = false;
+      const fallbackToBaseMap = () => {
+        if (fellBack || !isSubscribed) return;
+        fellBack = true;
+        try {
+          // Ola rejected the key / preview domain isn't whitelisted in the
+          // Krutrim console — switch to the base street map so it still renders.
+          setHasKey(false);
+          map.setStyle(FALLBACK_STYLE);
+        } catch {
+          // ignore — MapLibre will surface its own error
+        }
+      };
+
       map.on('load', () => {
         if (isSubscribed) {
           setMapLoaded(true);
@@ -139,9 +153,7 @@ export const OlaMap: React.FC<OlaMapProps> = ({
         const status = event?.error?.status || event?.status;
         if (status === 401 || status === 403) {
           console.warn('[OlaMaps] Map request returned authorization status:', status);
-          if (isSubscribed) {
-            setAuthError('Invalid API key or unauthorized domain in Krutrim/Ola Maps console.');
-          }
+          fallbackToBaseMap();
         }
       });
     } catch (err: any) {
@@ -378,7 +390,7 @@ export const OlaMap: React.FC<OlaMapProps> = ({
         <div className="pointer-events-none absolute top-3 left-3 right-3 z-30 flex items-center justify-between rounded-xl border border-[#e5ad4c]/40 bg-[#fffbeb]/95 p-2.5 text-xs font-semibold text-[#854d0e] shadow-md backdrop-blur-xs">
           <div className="flex items-center gap-2">
             <KeyRound size={16} className="shrink-0 text-[#d97706]" />
-            <span>Using base street map. Add <code className="rounded bg-black/5 px-1 py-0.5 font-mono text-[#b45309]">VITE_OLA_MAPS_API_KEY</code> to <code className="rounded bg-black/5 px-1 py-0.5 font-mono">.env</code> to activate Ola Vector Tiles.</span>
+            <span>Using base street map. Add <code className="rounded bg-black/5 px-1 py-0.5 font-mono text-[#b45309]">VITE_OLA_MAPS_API_KEY</code> and whitelist this domain in the Ola Maps console to activate Ola Vector Tiles.</span>
           </div>
         </div>
       )}
