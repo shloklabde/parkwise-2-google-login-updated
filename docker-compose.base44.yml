@@ -1,0 +1,24 @@
+services:
+  web:
+    image: oven/bun:1
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - node_modules:/app/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      - BASE44_PUBLIC_HOST_SUFFIX=${BASE44_PUBLIC_HOST_SUFFIX}
+    env_file:
+      - ./.env.base44-defaults
+      - /run/base44/app.env
+    command: sh -c "bun install --frozen-lockfile && bun run dev"
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  node_modules:

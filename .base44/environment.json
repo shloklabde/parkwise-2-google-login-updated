@@ -1,0 +1,12 @@
+{
+  "previewPort": 3000,
+  "healthPath": "/",
+  "startCommand": "docker compose -f docker-compose.base44.yml up -d",
+  "secrets": [
+    {
+      "name": "VITE_OLA_MAPS_API_KEY",
+      "description": "Ola Maps API key for vector map tiles and directions routing. Optional — the app falls back to a base street map and a simulated straight-line route without it. Get it from the Ola Maps developer dashboard (https://www.olamaps.io/).",
+      "requiredAtBoot": false
+    }
+  ]
+}
