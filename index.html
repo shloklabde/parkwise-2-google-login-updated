@@ -3,6 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Defensive fallback for environments where bundler class-field helper is missing
+      if (typeof globalThis !== 'undefined' && !globalThis.__publicField) {
+        globalThis.__publicField = function(obj, key, value) {
+          if (typeof key !== 'symbol') key = key + '';
+          if (key in obj) {
+            Object.defineProperty(obj, key, { enumerable: true, configurable: true, writable: true, value: value });
+          } else {
+            obj[key] = value;
+          }
+          return value;
+        };
+      }
+    </script>
     <title>Parkwise</title>
     <meta name="description" content="Smart parking reservation and real-time slot management platform with IoT monitoring and operator controls." />
     <meta property="og:title" content="Parkwise" />
@@ -12,6 +26,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet">
+    <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
   </head>
   <body>
     <div id="root"></div>

@@ -643,7 +643,7 @@ function LocationModal({
               required
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="e.g. 18 Residency Road, Ashok Nagar"
+              placeholder="e.g. Sector 12, Kharghar, Navi Mumbai"
               className="mt-1.5 w-full rounded-xl border border-[#d9e4e8] px-3.5 py-2.5 text-sm outline-none focus:border-[#7faeb5]"
             />
           </label>

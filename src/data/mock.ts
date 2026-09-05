@@ -25,6 +25,8 @@ export interface ParkingLocation {
   zone: string;
   accent: string;
   slots: ParkingSlot[];
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface Booking {
@@ -82,11 +84,12 @@ const makeSlots = (prefix: string, count: number, reserved: number[] = [], occup
   });
 
 export const parkingLocations: ParkingLocation[] = [
-  { id: 'abc-mall', name: 'ABC Mall Parking', address: '18 Residency Road, Ashok Nagar', distance: '1.2 km', rating: 4.6, pricePerHour: 30, totalSlots: 36, availableSlots: 19, facilities: ['Covered', 'EV charging', '24/7', 'CCTV'], hours: 'Open 24 hours', zone: 'Central', accent: 'from-[#246d68] to-[#4a9384]', slots: makeSlots('ABC', 36, [3, 14, 28], [2, 5, 9, 12, 17, 24, 31, 35], [21]) },
-  { id: 'xyz-park', name: 'XYZ Business Park', address: '72 Outer Ring Road, Bellandur', distance: '2.8 km', rating: 4.8, pricePerHour: 45, totalSlots: 48, availableSlots: 28, facilities: ['Covered', 'Security', 'EV charging'], hours: '05:00 – 23:00', zone: 'East', accent: 'from-[#2b625f] to-[#4a8d84]', slots: makeSlots('XYZ', 48, [4, 11, 22, 30], [1, 6, 8, 15, 18, 25, 32, 37, 43, 47], [19, 40]) },
-  { id: 'city-center', name: 'City Center Parking', address: '1 MG Road, Shivaji Nagar', distance: '3.4 km', rating: 4.4, pricePerHour: 25, totalSlots: 30, availableSlots: 11, facilities: ['Accessible', 'CCTV', 'Valet'], hours: '06:00 – 00:00', zone: 'Central', accent: 'from-[#c97868] to-[#e8aa72]', slots: makeSlots('CITY', 30, [2, 5, 18], [1, 3, 6, 8, 9, 12, 14, 21, 23, 26, 29], [16]) },
-  { id: 'metro-station', name: 'Metro Station Parking', address: 'Purple Line, Indiranagar Station', distance: '4.1 km', rating: 4.2, pricePerHour: 20, totalSlots: 42, availableSlots: 26, facilities: ['24/7', 'Accessible', 'Two-wheeler'], hours: 'Open 24 hours', zone: 'South', accent: 'from-[#2b7569] to-[#72a486]', slots: makeSlots('METRO', 42, [7, 15, 24], [2, 4, 12, 18, 26, 33, 39], [30]) },
-  { id: 'tech-park', name: 'Tech Park Parking', address: '9 Innovation Drive, Whitefield', distance: '7.6 km', rating: 4.7, pricePerHour: 35, totalSlots: 60, availableSlots: 41, facilities: ['Covered', 'EV charging', 'Security'], hours: '05:30 – 23:30', zone: 'East', accent: 'from-[#356461] to-[#7e9d83]', slots: makeSlots('TECH', 60, [1, 9, 16, 36], [4, 7, 13, 21, 29, 42, 50, 56], [32, 58]) },
+  { id: 'metropark_001', name: 'MetroPark', address: 'Sector 12, Kharghar, Navi Mumbai, Maharashtra 410210, India', distance: '0.8 km', rating: 4.8, pricePerHour: 30, totalSlots: 36, availableSlots: 19, facilities: ['Covered', 'EV charging', '24/7', 'CCTV'], hours: 'Open 24 hours', zone: 'Kharghar', accent: 'from-[#246d68] to-[#4a9384]', latitude: 19.0439, longitude: 73.0656, slots: makeSlots('METRO1', 36, [3, 14, 28], [2, 5, 9, 12, 17, 24, 31, 35], [21]) },
+  { id: 'abc-mall', name: 'ABC Mall Parking', address: '18 Residency Road, Ashok Nagar', distance: '1.2 km', rating: 4.6, pricePerHour: 30, totalSlots: 36, availableSlots: 19, facilities: ['Covered', 'EV charging', '24/7', 'CCTV'], hours: 'Open 24 hours', zone: 'Central', accent: 'from-[#246d68] to-[#4a9384]', latitude: 12.9724, longitude: 77.6045, slots: makeSlots('ABC', 36, [3, 14, 28], [2, 5, 9, 12, 17, 24, 31, 35], [21]) },
+  { id: 'xyz-park', name: 'XYZ Business Park', address: '72 Outer Ring Road, Bellandur', distance: '2.8 km', rating: 4.8, pricePerHour: 45, totalSlots: 48, availableSlots: 28, facilities: ['Covered', 'Security', 'EV charging'], hours: '05:00 – 23:00', zone: 'East', accent: 'from-[#2b625f] to-[#4a8d84]', latitude: 12.9304, longitude: 77.6784, slots: makeSlots('XYZ', 48, [4, 11, 22, 30], [1, 6, 8, 15, 18, 25, 32, 37, 43, 47], [19, 40]) },
+  { id: 'city-center', name: 'City Center Parking', address: '1 MG Road, Shivaji Nagar', distance: '3.4 km', rating: 4.4, pricePerHour: 25, totalSlots: 30, availableSlots: 11, facilities: ['Accessible', 'CCTV', 'Valet'], hours: '06:00 – 00:00', zone: 'Central', accent: 'from-[#c97868] to-[#e8aa72]', latitude: 12.9756, longitude: 77.6066, slots: makeSlots('CITY', 30, [2, 5, 18], [1, 3, 6, 8, 9, 12, 14, 21, 23, 26, 29], [16]) },
+  { id: 'metro-station', name: 'Metro Station Parking', address: 'Purple Line, Indiranagar Station', distance: '4.1 km', rating: 4.2, pricePerHour: 20, totalSlots: 42, availableSlots: 26, facilities: ['24/7', 'Accessible', 'Two-wheeler'], hours: 'Open 24 hours', zone: 'South', accent: 'from-[#2b7569] to-[#72a486]', latitude: 12.9784, longitude: 77.6408, slots: makeSlots('METRO', 42, [7, 15, 24], [2, 4, 12, 18, 26, 33, 39], [30]) },
+  { id: 'tech-park', name: 'Tech Park Parking', address: '9 Innovation Drive, Whitefield', distance: '7.6 km', rating: 4.7, pricePerHour: 35, totalSlots: 60, availableSlots: 41, facilities: ['Covered', 'EV charging', 'Security'], hours: '05:30 – 23:30', zone: 'East', accent: 'from-[#356461] to-[#7e9d83]', latitude: 12.9698, longitude: 77.7499, slots: makeSlots('TECH', 60, [1, 9, 16, 36], [4, 7, 13, 21, 29, 42, 50, 56], [32, 58]) },
 ];
 
 export const demoUsers: DemoUser[] = [

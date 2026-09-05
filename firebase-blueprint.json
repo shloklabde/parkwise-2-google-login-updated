@@ -29,6 +29,8 @@
         "totalSlots": { "type": "number" },
         "availableSlots": { "type": "number" },
         "rating": { "type": "number" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
         "image": { "type": "string" },
         "amenities": { "type": "string" }
       },

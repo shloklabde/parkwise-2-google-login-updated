@@ -43,11 +43,54 @@ export interface FirestoreParkingLocationDoc {
   hours?: string;
   zone?: string;
   accent?: string;
+  latitude?: number;
+  longitude?: number;
+  lat?: number;
+  lng?: number;
   [key: string]: unknown;
 }
 
 export const PARKING_LOCATIONS_COLLECTION = 'parkingLocation';
 export const PARKING_SLOTS_COLLECTION = 'ParkingSlots';
+
+/**
+ * Calculates straight line distance in km using Haversine formula
+ */
+export function calculateDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+export function formatDistanceKm(km: number): string {
+  if (km < 1) {
+    return `${Math.round(km * 1000)} m`;
+  }
+  return `${km.toFixed(1)} km`;
+}
+
+// Fallback known coordinates for mock / demo spots if not in Firestore
+const KNOWN_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  metropark_001: { lat: 19.0439, lng: 73.0656 },
+  'abc-mall': { lat: 12.9724, lng: 77.6045 },
+  'xyz-park': { lat: 12.9304, lng: 77.6784 },
+  'city-center': { lat: 12.9756, lng: 77.6066 },
+  'metro-station': { lat: 12.9784, lng: 77.6408 },
+  'tech-park': { lat: 12.9698, lng: 77.7499 },
+};
 
 export function normalizeSlotStatus(status?: unknown): SlotStatus {
   const normalized = String(status || '').trim().toLowerCase();
@@ -111,10 +154,29 @@ export function parseParkingLocationDoc(
   ];
   const accentIndex = Math.abs(id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % defaultAccents.length;
 
+  const lat =
+    typeof data.latitude === 'number'
+      ? data.latitude
+      : typeof data.lat === 'number'
+      ? data.lat
+      : KNOWN_COORDINATES[id]?.lat ?? (id === 'metropark_001' ? 19.0439 : 12.9719);
+
+  const lng =
+    typeof data.longitude === 'number'
+      ? data.longitude
+      : typeof data.lng === 'number'
+      ? data.lng
+      : KNOWN_COORDINATES[id]?.lng ?? (id === 'metropark_001' ? 73.0656 : 77.6020);
+
   return {
     id,
-    name: data.name || data.locationName || `Parking Location ${id}`,
-    address: data.address || data.location || 'City Center Facility',
+    name: data.name || data.locationName || (id === 'metropark_001' ? 'MetroPark' : `Parking Location ${id}`),
+    address:
+      data.address ||
+      data.location ||
+      (id === 'metropark_001'
+        ? 'Sector 12, Kharghar, Navi Mumbai, Maharashtra 410210, India'
+        : 'City Center Facility'),
     distance: data.distance || '1.2 km',
     rating: typeof data.rating === 'number' ? data.rating : 4.6,
     pricePerHour: typeof data.pricePerHour === 'number' ? data.pricePerHour : typeof data.rate === 'number' ? data.rate : 30,
@@ -125,6 +187,8 @@ export function parseParkingLocationDoc(
     zone: data.zone || 'Central',
     accent: data.accent || defaultAccents[accentIndex],
     slots: slotsToUse,
+    latitude: lat,
+    longitude: lng,
   };
 }
 
@@ -211,8 +275,8 @@ export const parkingService = {
         locations = [
           {
             id: 'metropark_001',
-            name: 'SmartPark Metro',
-            address: '18 Residency Road, Ashok Nagar',
+            name: 'MetroPark',
+            address: 'Sector 12, Kharghar, Navi Mumbai, Maharashtra 410210, India',
             distance: '1.2 km',
             rating: 4.8,
             pricePerHour: 30,
@@ -220,8 +284,10 @@ export const parkingService = {
             availableSlots: availableCount,
             facilities: ['Covered', 'EV charging', '24/7', 'CCTV'],
             hours: 'Open 24 hours',
-            zone: 'Central',
+            zone: 'Kharghar',
             accent: 'from-[#246d68] to-[#4a9384]',
+            latitude: 19.0439,
+            longitude: 73.0656,
             slots: currentSlots,
           },
         ];
@@ -338,6 +404,8 @@ export const parkingService = {
     distance?: string;
     rating?: number;
     accent?: string;
+    latitude?: number;
+    longitude?: number;
   }): Promise<string> {
     const colRef = collection(firestore, PARKING_LOCATIONS_COLLECTION);
     const docRef = await addDoc(colRef, {
@@ -354,6 +422,8 @@ export const parkingService = {
       distance: data.distance || '1.0 km',
       rating: typeof data.rating === 'number' ? data.rating : 4.8,
       accent: data.accent || 'from-[#246d68] to-[#4a9384]',
+      latitude: typeof data.latitude === 'number' ? data.latitude : 19.0439,
+      longitude: typeof data.longitude === 'number' ? data.longitude : 73.0656,
       createdAt: serverTimestamp(),
     });
     return docRef.id;

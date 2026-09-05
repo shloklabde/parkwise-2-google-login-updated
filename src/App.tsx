@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation, useParams } from 'wouter';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -9,6 +9,9 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { AppProvider, useApp } from '@/contexts/AppContext';
 import { analyticsData, demoUsers, devices, parkingLocations, type Booking, type ParkingLocation, type ParkingSlot } from '@/data/mock';
 import { AdminShell, AppLogo, BookingCard, EmptyState, FilterButton, MockMap, PageHeader, ParkingCard, PublicNav, QRCard, SlotMap, StatCard, StatusBadge, UserShell } from '@/components/SmartParkUI';
+import { OlaMap } from '@/components/OlaMap';
+import { getCurrentUserLocation, getOlaDirections, type DirectionsRoute } from '@/services/olaMapsService';
+import { calculateDistanceKm, formatDistanceKm } from '@/services/parkingService';
 import { parkingService } from '@/services/mockServices';
 import {
   AdminLoginPage,
@@ -27,7 +30,6 @@ import BorderGlow from '@/components/ui/BorderGlow';
 import { GooeyInput } from '@/components/ui/gooey-input';
 import Particles from '@/components/ui/Particles';
 import SpecularButton from '@/components/ui/SpecularButton';
-import ScrollReveal from '@/components/ui/ScrollReveal';
 import { motion } from 'motion/react';
 import { GoogleSignInButton, AuthDivider } from '@/components/GoogleSignInButton';
 
@@ -116,31 +118,7 @@ function Home() {
               </span>
             </SpecularButton>
           </motion.div>
-        </div><p className="mt-3 text-[11px] text-[#a9c0ca]">Try “MG Road”, “Indiranagar” or “near the airport”</p></div><div className="animate-rise animate-delay-2 relative hidden lg:block"><div className="rounded-[28px] border border-white/15 bg-white/8 p-3 shadow-2xl backdrop-blur-sm"><div className="relative h-[350px] overflow-hidden rounded-[20px] bg-[#d6e7e1]"><div className="absolute inset-0 opacity-50" style={{ backgroundImage: 'linear-gradient(32deg, transparent 46%, #9fbeb9 47%, #9fbeb9 49%, transparent 50%), linear-gradient(146deg, transparent 43%, #aec9c2 44%, #aec9c2 46%, transparent 47%)', backgroundSize: '95px 80px' }} /><div className="absolute left-[17%] top-[24%] h-24 w-24 rotate-12 rounded-lg bg-[#b9d1c9]" /><div className="absolute bottom-[15%] right-[10%] h-28 w-36 -rotate-12 rounded-lg bg-[#c0d8ce]" /><div className="absolute left-[42%] top-[43%] grid h-12 w-12 place-items-center rounded-full border-4 border-white bg-[#e5ad4c] text-[#543d1b] shadow-lg"><MapPin size={20} fill="currentColor" /></div><div className="absolute left-[19%] top-[60%] grid h-9 w-9 place-items-center rounded-full border-4 border-white bg-[#16445f] text-white shadow-lg"><MapPin size={15} fill="currentColor" /></div><div className="absolute right-[20%] top-[20%] grid h-9 w-9 place-items-center rounded-full border-4 border-white bg-[#16445f] text-white shadow-lg"><MapPin size={15} fill="currentColor" /></div><div className="absolute bottom-4 left-4 right-4 rounded-xl bg-white/90 p-3 shadow-sm"><div className="flex items-center justify-between"><span className="text-xs font-bold text-[#29485c]">Live availability</span><span className="flex items-center gap-1 text-[10px] font-bold text-[#26744d]"><span className="h-1.5 w-1.5 rounded-full bg-current" />Updated 8 sec ago</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#deebe6]"><div className="h-full w-[68%] rounded-full bg-[#3d9b7a]" /></div></div></div></div><span className="absolute -bottom-5 -left-10 rounded-xl bg-[#f4c16e] px-3 py-2 text-[11px] font-black text-[#4b3517] shadow-lg">37 spots nearby</span></div></div></section>
-    {/* React Bits ScrollReveal Section - Interactive on scroll down */}
-    <section className="relative overflow-hidden border-b border-[#dfd7c5]/70 bg-[#faf6ee] py-20 sm:py-24 lg:py-28">
-      <div className="mx-auto max-w-4xl px-5 text-center sm:px-8">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#d8cebe] bg-white/90 px-4 py-1.5 shadow-xs backdrop-blur-sm">
-          <span className="h-2 w-2 rounded-full bg-[#dfa236]" />
-          <span className="text-[11px] font-bold uppercase tracking-[.18em] text-[#2c4e57]">Scroll to reveal</span>
-        </div>
-        <ScrollReveal
-          baseOpacity={0}
-          enableBlur={true}
-          baseRotation={5}
-          blurStrength={10}
-          containerClassName="mx-auto max-w-3xl"
-          textClassName="font-display text-2xl sm:text-4xl lg:text-5xl font-bold leading-snug tracking-tight text-[#17384a]"
-        >
-          When does a man die? When he is hit by a bullet? No! When he suffers a disease?
-          No! When he ate a soup made out of a poisonous mushroom?
-          No! A man dies when he is forgotten!
-        </ScrollReveal>
-        <p className="mt-8 text-xs font-semibold text-[#7c929a]">
-          React Bits <span className="rounded-md bg-[#ebe3d4] px-2 py-1 font-mono text-[11px] text-[#214b53]">&lt;ScrollReveal /&gt;</span> · Scroll down to scrub rotation, blur &amp; word opacity
-        </p>
-      </div>
-    </section>
+        </div><p className="mt-3 text-[11px] text-[#a9c0ca]">Try “MG Road”, “Indiranagar” or “near the airport”</p></div><div className="animate-rise animate-delay-2 relative hidden lg:block"><div className="rounded-[28px] border border-white/15 bg-white/8 p-3 shadow-2xl backdrop-blur-sm"><div className="relative h-[350px] overflow-hidden rounded-[20px] bg-[#1a384f]"><OlaMap locations={parkingLocations} height={350} onSelectLocation={(loc) => setLocation(`/parking/${loc.id}`)} /><div className="pointer-events-none absolute bottom-4 left-4 right-4 z-20 rounded-xl bg-white/95 p-3 shadow-md backdrop-blur-xs"><div className="flex items-center justify-between"><span className="text-xs font-bold text-[#29485c]">Live availability</span><span className="flex items-center gap-1 text-[10px] font-bold text-[#26744d]"><span className="h-1.5 w-1.5 rounded-full bg-current pulse-dot" />Connected to Firestore</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#deebe6]"><div className="h-full w-[72%] rounded-full bg-[#3d9b7a]" /></div></div></div></div><span className="absolute -bottom-5 -left-10 z-20 rounded-xl bg-[#f4c16e] px-3 py-2 text-[11px] font-black text-[#4b3517] shadow-lg">Live Map · {parkingLocations.reduce((acc, l) => acc + l.availableSlots, 0)} spots nearby</span></div></div></section>
     <section className="mx-auto max-w-[1240px] px-5 py-14 lg:px-8 lg:py-20"><div className="flex items-end justify-between"><div><p className="text-[11px] font-bold uppercase tracking-[.16em] text-[#c28636]">A calmer commute</p><h2 className="mt-2 font-display text-3xl font-bold tracking-[-.05em] text-[#183653]">A better arrival starts here.</h2></div><Link href="/parking" className="hidden items-center gap-1 text-sm font-bold text-[#286b70] md:flex">Explore all locations <ArrowRight size={15} /></Link></div><div className="mt-8 grid gap-4 md:grid-cols-3">{parkingLocations.slice(0, 3).map((location, index) => <div key={location.id} className={index === 1 ? 'md:translate-y-5' : ''}><ParkingCard location={location} /></div>)}</div></section>
     <section className="border-y border-[#dfe7eb] bg-[#eef5f3]"><div className="mx-auto grid max-w-[1240px] gap-8 px-5 py-14 lg:grid-cols-[.8fr_1.2fr] lg:px-8"><div><p className="text-[11px] font-bold uppercase tracking-[.16em] text-[#c28636]">How it works</p><h2 className="mt-2 max-w-sm font-display text-3xl font-bold tracking-[-.05em] text-[#183653]">The last-minute scramble, retired.</h2><p className="mt-4 max-w-sm text-sm leading-6 text-[#71818b]">Parkwise takes the guesswork out of parking with one clear promise: the space you see is the space you can use.</p></div><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-2xl bg-white p-5"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#e4f0ef] text-[#2d7b79]"><Compass size={18} /></span><p className="mt-8 font-display text-lg font-bold text-[#28495e]">01 · Search</p><p className="mt-2 text-xs leading-5 text-[#7d8c94]">See verified spaces around where you are headed.</p></div><div className="rounded-2xl bg-white p-5 sm:translate-y-4"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#fff0d5] text-[#a16f26]"><CalendarDays size={18} /></span><p className="mt-8 font-display text-lg font-bold text-[#28495e]">02 · Reserve</p><p className="mt-2 text-xs leading-5 text-[#7d8c94]">Pick your exact bay and arrival window.</p></div><div className="rounded-2xl bg-white p-5 sm:translate-y-8"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#e8e9fb] text-[#5a5aa4]"><ShieldCheck size={18} /></span><p className="mt-8 font-display text-lg font-bold text-[#28495e]">03 · Arrive</p><p className="mt-2 text-xs leading-5 text-[#7d8c94]">Follow your access pass and park with confidence.</p></div></div></div></section>
     <section className="mx-auto max-w-[1240px] px-5 py-14 pb-28 lg:px-8 lg:pb-36"><div className="grid gap-6 rounded-3xl bg-[#173f5d] px-7 py-10 md:grid-cols-[1fr_auto] md:items-center md:px-12"><div><p className="text-[11px] font-bold uppercase tracking-[.16em] text-[#f4c26f]">Built for real life</p><h2 className="mt-2 max-w-xl font-display text-3xl font-bold tracking-[-.05em] text-white">Your next space is closer than you think.</h2><p className="mt-3 text-sm text-[#b8d0d8]">Live sensors, clear pricing, and no circling the block.</p></div><Link href="/parking" className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#f4c26f] px-5 py-3 text-sm font-bold text-[#443116] hover:bg-[#ffd080]">Find a space <ArrowRight size={16} /></Link></div></section>
@@ -592,25 +570,66 @@ function ForgotPage() {
 
 function ParkingPage() {
   const { parkingLocations, parkingLoading, parkingError } = useApp();
+  const [, setLocation] = useLocation();
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('nearest');
   const [openOnly, setOpenOnly] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'locating' | 'granted' | 'denied'>('idle');
+  const [locationNotice, setLocationNotice] = useState<string>('');
 
-  const list = useMemo(
-    () =>
-      parkingLocations
-        .filter((location) => `${location.name} ${location.address}`.toLowerCase().includes(search.toLowerCase()))
-        .sort((a, b) =>
-          sort === 'price'
-            ? a.pricePerHour - b.pricePerHour
-            : sort === 'availability'
-            ? b.availableSlots - a.availableSlots
-            : sort === 'rating'
-            ? b.rating - a.rating
-            : parseFloat(a.distance) - parseFloat(b.distance),
-        ),
-    [parkingLocations, search, sort],
-  );
+  // Request browser geolocation once on mount or when user clicks locate
+  const requestLocation = async () => {
+    setLocationStatus('locating');
+    setLocationNotice('');
+    try {
+      const pos = await getCurrentUserLocation(10000);
+      setUserLocation({ lat: pos.latitude, lng: pos.longitude });
+      setLocationStatus('granted');
+      setSort('nearest');
+    } catch (err: any) {
+      console.info('Geolocation prompt response:', err?.message);
+      setLocationStatus('denied');
+      setLocationNotice(
+        err?.message || 'Location permission was denied. Showing available parking locations.'
+      );
+    }
+  };
+
+  useEffect(() => {
+    // Attempt location permission on page load
+    requestLocation();
+  }, []);
+
+  // Compute live distance if user coordinates are known, and sort appropriately
+  const list = useMemo(() => {
+    return parkingLocations
+      .filter((loc) => {
+        if (openOnly && loc.availableSlots <= 0) return false;
+        return `${loc.name} ${loc.address} ${loc.zone}`.toLowerCase().includes(search.toLowerCase());
+      })
+      .map((loc) => {
+        if (userLocation && typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+          const distKm = calculateDistanceKm(userLocation.lat, userLocation.lng, loc.latitude, loc.longitude);
+          return {
+            ...loc,
+            calculatedKm: distKm,
+            distance: formatDistanceKm(distKm),
+          };
+        }
+        return {
+          ...loc,
+          calculatedKm: parseFloat(loc.distance) || 99,
+        };
+      })
+      .sort((a, b) => {
+        if (sort === 'price') return a.pricePerHour - b.pricePerHour;
+        if (sort === 'availability') return b.availableSlots - a.availableSlots;
+        if (sort === 'rating') return b.rating - a.rating;
+        // 'nearest' - Use real coordinate distance when available
+        return (a.calculatedKm ?? 99) - (b.calculatedKm ?? 99);
+      });
+  }, [parkingLocations, search, sort, openOnly, userLocation]);
 
   return (
     <UserPage>
@@ -618,14 +637,55 @@ function ParkingPage() {
         <PageHeader
           eyebrow="Explore the city"
           title="Find parking"
-          detail="Verified spaces around your destination, updated in real time from Firestore."
-          action={<FilterButton active={openOnly} onClick={() => setOpenOnly(!openOnly)}>Open now</FilterButton>}
+          detail="Verified spaces around your destination, updated in real time from Firestore and Ola Maps."
+          action={
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={requestLocation}
+                disabled={locationStatus === 'locating'}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-all ${
+                  locationStatus === 'granted'
+                    ? 'border-[#26744d]/30 bg-[#e6f4ed] text-[#206943]'
+                    : 'border-[#d5e2e6] bg-white text-[#36576a] hover:bg-[#f1f7f7]'
+                }`}
+                title="Use current location to find nearest spots"
+              >
+                <Navigation
+                  size={13}
+                  className={locationStatus === 'locating' ? 'animate-spin' : locationStatus === 'granted' ? 'text-[#206943]' : ''}
+                />
+                <span>
+                  {locationStatus === 'locating'
+                    ? 'Locating…'
+                    : locationStatus === 'granted'
+                    ? 'Using your GPS'
+                    : 'Locate me'}
+                </span>
+              </button>
+              <FilterButton active={openOnly} onClick={() => setOpenOnly(!openOnly)}>Open now</FilterButton>
+            </div>
+          }
         />
+
+        {locationNotice && (
+          <div className="mb-4 flex items-center justify-between rounded-xl border border-[#dfe7eb] bg-[#f8fafb] px-4 py-2.5 text-xs text-[#5f7481]">
+            <span>{locationNotice}</span>
+            <button
+              onClick={() => setLocationNotice('')}
+              className="font-bold text-[#286b70] hover:underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {parkingError && (
           <div className="mb-5 rounded-2xl bg-[#fceceb] p-4 text-xs font-semibold text-[#aa504c]">
             Database notice: {parkingError}
           </div>
         )}
+
         <div className="mb-5 flex flex-col gap-3 sm:flex-row">
           <div className="flex flex-1 items-center gap-3 rounded-xl border border-[#d9e4e8] bg-white px-4">
             <Search size={17} className="text-[#78949d]" />
@@ -633,7 +693,7 @@ function ParkingPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid="input-parking-search"
-              placeholder="Search by location or address"
+              placeholder="Search by location, landmark or address"
               className="w-full bg-transparent py-3 text-sm outline-none placeholder:text-[#9aabb2]"
             />
           </div>
@@ -643,12 +703,13 @@ function ParkingPage() {
             data-testid="select-parking-sort"
             className="rounded-xl border border-[#d9e4e8] bg-white px-4 py-3 text-sm font-semibold text-[#456274] outline-none"
           >
-            <option value="nearest">Nearest first</option>
+            <option value="nearest">Nearest first (GPS)</option>
             <option value="price">Lowest price</option>
             <option value="availability">Most available</option>
             <option value="rating">Highest rated</option>
           </select>
         </div>
+
         {parkingLoading && list.length === 0 ? (
           <div className="flex h-64 items-center justify-center rounded-2xl border border-[#dfe7eb] bg-white">
             <div className="flex items-center gap-3 text-sm font-semibold text-[#71858c]">
@@ -657,7 +718,7 @@ function ParkingPage() {
             </div>
           </div>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(330px,.9fr)]">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,.95fr)]">
             <div className="space-y-3">
               {list.length ? (
                 list.map((location) => <ParkingCard key={location.id} location={location} />)
@@ -670,8 +731,19 @@ function ParkingPage() {
                 />
               )}
             </div>
-            <div className="lg:sticky lg:top-[95px] lg:h-fit">
-              <MockMap locations={list} />
+            <div className="lg:sticky lg:top-[95px] lg:h-fit space-y-3">
+              <div className="overflow-hidden rounded-2xl border border-[#cfdde2] shadow-sm">
+                <OlaMap
+                  locations={list}
+                  userLocation={userLocation}
+                  height={480}
+                  onSelectLocation={(loc) => setLocation(`/parking/${loc.id}`)}
+                />
+              </div>
+              <div className="rounded-xl border border-[#dfe7ec] bg-white/80 p-3 text-xs text-[#556e7d] backdrop-blur-xs flex items-center justify-between">
+                <span>Click any pin to inspect real-time bay availability</span>
+                <span className="font-bold text-[#1f4864]">{list.length} mapped</span>
+              </div>
             </div>
           </div>
         )}
@@ -684,6 +756,53 @@ function LocationPage() {
   const { id } = useParams<{ id: string }>();
   const { parkingLocations, parkingLoading } = useApp();
   const location = parkingLocations.find((l) => l.id === id) || parkingLocations[0];
+
+  // Routing and directions state
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [route, setRoute] = useState<DirectionsRoute | null>(null);
+  const [directionsLoading, setDirectionsLoading] = useState(false);
+  const [directionsError, setDirectionsError] = useState<string | null>(null);
+  const [showDirectionsPanel, setShowDirectionsPanel] = useState(false);
+
+  const handleGetDirections = async () => {
+    setDirectionsLoading(true);
+    setDirectionsError(null);
+    setShowDirectionsPanel(true);
+
+    try {
+      // 1. Get user GPS or fallback nearby coordinate
+      let userCoords = userLocation;
+      const destLat = location.latitude ?? (location.id === 'metropark_001' ? 19.0439 : 12.9719);
+      const destLng = location.longitude ?? (location.id === 'metropark_001' ? 73.0656 : 77.6020);
+
+      if (!userCoords) {
+        try {
+          const pos = await getCurrentUserLocation(8000);
+          userCoords = { lat: pos.latitude, lng: pos.longitude };
+          setUserLocation(userCoords);
+        } catch (geoErr: any) {
+          // Fallback origin: nearby approach point based on destination
+          const isKharghar = location.id === 'metropark_001' || Math.abs(destLat - 19.0439) < 0.1;
+          console.info('GPS not available, using approach origin:', geoErr?.message);
+          userCoords = isKharghar ? { lat: 19.0410, lng: 73.0620 } : { lat: 12.9719, lng: 77.6020 };
+          setUserLocation(userCoords);
+        }
+      }
+
+      // 2. Fetch Ola Maps directions route
+      const directions = await getOlaDirections(
+        { lat: userCoords.lat, lng: userCoords.lng },
+        { lat: destLat, lng: destLng }
+      );
+
+      setRoute(directions);
+    } catch (err: any) {
+      console.error('Directions error:', err);
+      setDirectionsError(err?.message || 'Could not fetch directions route.');
+    } finally {
+      setDirectionsLoading(false);
+    }
+  };
 
   if (!location && parkingLoading) {
     return (
@@ -740,15 +859,73 @@ function LocationPage() {
                 Reserve a space <ArrowRight size={16} />
               </Link>
               <button
-                onClick={() => window.alert('Directions are mocked until maps connect.')}
+                type="button"
+                onClick={handleGetDirections}
+                disabled={directionsLoading}
                 data-testid="button-directions"
-                className="inline-flex items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-5 py-3 text-sm font-bold text-white hover:bg-white/15"
+                className="inline-flex items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-5 py-3 text-sm font-bold text-white hover:bg-white/15 disabled:opacity-50"
               >
-                <Navigation size={15} /> Get directions
+                {directionsLoading ? (
+                  <>
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Calculating route…
+                  </>
+                ) : (
+                  <>
+                    <Navigation size={15} /> Get directions
+                  </>
+                )}
               </button>
             </div>
           </div>
         </div>
+
+        {/* Live Route Navigation Banner if active */}
+        {showDirectionsPanel && (
+          <div className="mt-5 rounded-2xl border border-[#2a6d71]/30 bg-[#eef7f6] p-4 text-xs shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#277873] text-white">
+                  <Navigation size={16} />
+                </span>
+                <div>
+                  <p className="font-bold text-[#1a4150]">
+                    Directions to {location.name}
+                  </p>
+                  <p className="text-[#5b737d]">
+                    {route
+                      ? `${route.distanceFormatted} · approx ${route.durationFormatted}`
+                      : directionsLoading
+                      ? 'Contacting Ola Maps routing service…'
+                      : 'Route active'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${location.latitude || (location.id === 'metropark_001' ? 19.0439 : 12.9719)},${location.longitude || (location.id === 'metropark_001' ? 73.0656 : 77.6020)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded-lg border border-[#cfdfe2] bg-white px-3 py-1.5 font-bold text-[#20495f] hover:bg-[#f3f7f8]"
+                >
+                  <ExternalLink size={12} /> Open in Maps app
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setShowDirectionsPanel(false)}
+                  className="rounded-lg p-1 text-[#6c8592] hover:bg-[#e0eceb]"
+                  title="Close route panel"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            {directionsError && (
+              <p className="mt-2 text-[#aa504c]">{directionsError}</p>
+            )}
+          </div>
+        )}
+
         <div className="mt-6 grid gap-5 lg:grid-cols-[1.15fr_.85fr]">
           <div className="space-y-5">
             <div className="rounded-2xl border border-[#dfe7eb] bg-white p-5">
@@ -773,7 +950,36 @@ function LocationPage() {
             </div>
             <SlotMap slots={location.slots} />
           </div>
+
           <div className="space-y-5">
+            {/* Ola Map Location & Directions Viewer */}
+            <div className="overflow-hidden rounded-2xl border border-[#dfe7eb] bg-white p-4 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#234b62]">Interactive Map</span>
+                <span className="text-[10px] font-semibold text-[#66818f]">{location.zone} Zone</span>
+              </div>
+              <div className="overflow-hidden rounded-xl border border-[#e1e9ec]">
+                <OlaMap
+                  locations={[location]}
+                  selectedLocation={location}
+                  userLocation={userLocation}
+                  routeCoordinates={route?.coordinates}
+                  height={240}
+                  zoom={14}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-[#6d828f]">
+                <span>Coordinates: {location.latitude?.toFixed(4)}, {location.longitude?.toFixed(4)}</span>
+                <button
+                  type="button"
+                  onClick={handleGetDirections}
+                  className="font-bold text-[#277873] hover:underline"
+                >
+                  {route ? 'Refresh route' : 'Get directions'}
+                </button>
+              </div>
+            </div>
+
             <div className="rounded-2xl border border-[#dfe7eb] bg-white p-5">
               <p className="text-xs font-bold text-[#788994]">At a glance</p>
               <div className="mt-4 grid grid-cols-2 gap-3">
@@ -793,6 +999,7 @@ function LocationPage() {
                 ))}
               </div>
             </div>
+
             <div className="rounded-2xl border border-[#dfe7eb] bg-[#eef5f3] p-5">
               <p className="flex items-center gap-2 text-sm font-bold text-[#2d6569]"><ShieldCheck size={17} /> Live sensor monitored</p>
               <p className="mt-2 text-xs leading-5 text-[#71858c]">Slots A1, A2, A3, A4 are synchronized with your hardware and Firestore in real time.</p>
