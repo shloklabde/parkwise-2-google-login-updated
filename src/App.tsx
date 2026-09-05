@@ -27,7 +27,6 @@ import BorderGlow from '@/components/ui/BorderGlow';
 import { GooeyInput } from '@/components/ui/gooey-input';
 import Particles from '@/components/ui/Particles';
 import SpecularButton from '@/components/ui/SpecularButton';
-import ScrollReveal from '@/components/ui/ScrollReveal';
 import { motion } from 'motion/react';
 import { GoogleSignInButton, AuthDivider } from '@/components/GoogleSignInButton';
 
@@ -117,30 +116,6 @@ function Home() {
             </SpecularButton>
           </motion.div>
         </div><p className="mt-3 text-[11px] text-[#a9c0ca]">Try “MG Road”, “Indiranagar” or “near the airport”</p></div><div className="animate-rise animate-delay-2 relative hidden lg:block"><div className="rounded-[28px] border border-white/15 bg-white/8 p-3 shadow-2xl backdrop-blur-sm"><div className="relative h-[350px] overflow-hidden rounded-[20px] bg-[#d6e7e1]"><div className="absolute inset-0 opacity-50" style={{ backgroundImage: 'linear-gradient(32deg, transparent 46%, #9fbeb9 47%, #9fbeb9 49%, transparent 50%), linear-gradient(146deg, transparent 43%, #aec9c2 44%, #aec9c2 46%, transparent 47%)', backgroundSize: '95px 80px' }} /><div className="absolute left-[17%] top-[24%] h-24 w-24 rotate-12 rounded-lg bg-[#b9d1c9]" /><div className="absolute bottom-[15%] right-[10%] h-28 w-36 -rotate-12 rounded-lg bg-[#c0d8ce]" /><div className="absolute left-[42%] top-[43%] grid h-12 w-12 place-items-center rounded-full border-4 border-white bg-[#e5ad4c] text-[#543d1b] shadow-lg"><MapPin size={20} fill="currentColor" /></div><div className="absolute left-[19%] top-[60%] grid h-9 w-9 place-items-center rounded-full border-4 border-white bg-[#16445f] text-white shadow-lg"><MapPin size={15} fill="currentColor" /></div><div className="absolute right-[20%] top-[20%] grid h-9 w-9 place-items-center rounded-full border-4 border-white bg-[#16445f] text-white shadow-lg"><MapPin size={15} fill="currentColor" /></div><div className="absolute bottom-4 left-4 right-4 rounded-xl bg-white/90 p-3 shadow-sm"><div className="flex items-center justify-between"><span className="text-xs font-bold text-[#29485c]">Live availability</span><span className="flex items-center gap-1 text-[10px] font-bold text-[#26744d]"><span className="h-1.5 w-1.5 rounded-full bg-current" />Updated 8 sec ago</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#deebe6]"><div className="h-full w-[68%] rounded-full bg-[#3d9b7a]" /></div></div></div></div><span className="absolute -bottom-5 -left-10 rounded-xl bg-[#f4c16e] px-3 py-2 text-[11px] font-black text-[#4b3517] shadow-lg">37 spots nearby</span></div></div></section>
-    {/* React Bits ScrollReveal Section - Interactive on scroll down */}
-    <section className="relative overflow-hidden border-b border-[#dfd7c5]/70 bg-[#faf6ee] py-20 sm:py-24 lg:py-28">
-      <div className="mx-auto max-w-4xl px-5 text-center sm:px-8">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#d8cebe] bg-white/90 px-4 py-1.5 shadow-xs backdrop-blur-sm">
-          <span className="h-2 w-2 rounded-full bg-[#dfa236]" />
-          <span className="text-[11px] font-bold uppercase tracking-[.18em] text-[#2c4e57]">Scroll to reveal</span>
-        </div>
-        <ScrollReveal
-          baseOpacity={0}
-          enableBlur={true}
-          baseRotation={5}
-          blurStrength={10}
-          containerClassName="mx-auto max-w-3xl"
-          textClassName="font-display text-2xl sm:text-4xl lg:text-5xl font-bold leading-snug tracking-tight text-[#17384a]"
-        >
-          When does a man die? When he is hit by a bullet? No! When he suffers a disease?
-          No! When he ate a soup made out of a poisonous mushroom?
-          No! A man dies when he is forgotten!
-        </ScrollReveal>
-        <p className="mt-8 text-xs font-semibold text-[#7c929a]">
-          React Bits <span className="rounded-md bg-[#ebe3d4] px-2 py-1 font-mono text-[11px] text-[#214b53]">&lt;ScrollReveal /&gt;</span> · Scroll down to scrub rotation, blur &amp; word opacity
-        </p>
-      </div>
-    </section>
     <section className="mx-auto max-w-[1240px] px-5 py-14 lg:px-8 lg:py-20"><div className="flex items-end justify-between"><div><p className="text-[11px] font-bold uppercase tracking-[.16em] text-[#c28636]">A calmer commute</p><h2 className="mt-2 font-display text-3xl font-bold tracking-[-.05em] text-[#183653]">A better arrival starts here.</h2></div><Link href="/parking" className="hidden items-center gap-1 text-sm font-bold text-[#286b70] md:flex">Explore all locations <ArrowRight size={15} /></Link></div><div className="mt-8 grid gap-4 md:grid-cols-3">{parkingLocations.slice(0, 3).map((location, index) => <div key={location.id} className={index === 1 ? 'md:translate-y-5' : ''}><ParkingCard location={location} /></div>)}</div></section>
     <section className="border-y border-[#dfe7eb] bg-[#eef5f3]"><div className="mx-auto grid max-w-[1240px] gap-8 px-5 py-14 lg:grid-cols-[.8fr_1.2fr] lg:px-8"><div><p className="text-[11px] font-bold uppercase tracking-[.16em] text-[#c28636]">How it works</p><h2 className="mt-2 max-w-sm font-display text-3xl font-bold tracking-[-.05em] text-[#183653]">The last-minute scramble, retired.</h2><p className="mt-4 max-w-sm text-sm leading-6 text-[#71818b]">Parkwise takes the guesswork out of parking with one clear promise: the space you see is the space you can use.</p></div><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-2xl bg-white p-5"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#e4f0ef] text-[#2d7b79]"><Compass size={18} /></span><p className="mt-8 font-display text-lg font-bold text-[#28495e]">01 · Search</p><p className="mt-2 text-xs leading-5 text-[#7d8c94]">See verified spaces around where you are headed.</p></div><div className="rounded-2xl bg-white p-5 sm:translate-y-4"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#fff0d5] text-[#a16f26]"><CalendarDays size={18} /></span><p className="mt-8 font-display text-lg font-bold text-[#28495e]">02 · Reserve</p><p className="mt-2 text-xs leading-5 text-[#7d8c94]">Pick your exact bay and arrival window.</p></div><div className="rounded-2xl bg-white p-5 sm:translate-y-8"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#e8e9fb] text-[#5a5aa4]"><ShieldCheck size={18} /></span><p className="mt-8 font-display text-lg font-bold text-[#28495e]">03 · Arrive</p><p className="mt-2 text-xs leading-5 text-[#7d8c94]">Follow your access pass and park with confidence.</p></div></div></div></section>
     <section className="mx-auto max-w-[1240px] px-5 py-14 pb-28 lg:px-8 lg:pb-36"><div className="grid gap-6 rounded-3xl bg-[#173f5d] px-7 py-10 md:grid-cols-[1fr_auto] md:items-center md:px-12"><div><p className="text-[11px] font-bold uppercase tracking-[.16em] text-[#f4c26f]">Built for real life</p><h2 className="mt-2 max-w-xl font-display text-3xl font-bold tracking-[-.05em] text-white">Your next space is closer than you think.</h2><p className="mt-3 text-sm text-[#b8d0d8]">Live sensors, clear pricing, and no circling the block.</p></div><Link href="/parking" className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#f4c26f] px-5 py-3 text-sm font-bold text-[#443116] hover:bg-[#ffd080]">Find a space <ArrowRight size={16} /></Link></div></section>
