@@ -1146,6 +1146,15 @@ function SelectPage() {
             </div>
 
             <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${location.latitude ?? (location.id === 'metropark_001' ? 19.0439 : 12.9719)},${location.longitude ?? (location.id === 'metropark_001' ? 73.0656 : 77.6020)}`}
+                target="_blank"
+                rel="noreferrer"
+                data-testid="link-get-directions"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#277873] px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-[#1f6360]"
+              >
+                <Navigation size={16} /> Get Directions
+              </a>
               <Link href="/bookings" data-testid="link-view-confirmed-booking" className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#153b5b] px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-[#20496d]">
                 View My Bookings <ArrowRight size={16} />
               </Link>
