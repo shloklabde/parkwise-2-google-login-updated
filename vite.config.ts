@@ -15,6 +15,11 @@ export default defineConfig(() => {
       target: 'es2022',
     },
     optimizeDeps: {
+      // maplibre-gl v6 loads its tile worker by URL; Vite's dep pre-bundler does
+      // not emit maplibre-gl-worker.mjs into .vite/deps, which leaves the map
+      // style loaded but no vector tiles rendered (blank/white map). Exclude it
+      // so the worker resolves from node_modules instead.
+      exclude: ['maplibre-gl'],
       esbuildOptions: {
         target: 'es2022',
       },
