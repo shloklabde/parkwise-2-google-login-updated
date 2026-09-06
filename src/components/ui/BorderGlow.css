@@ -164,4 +164,7 @@
   z-index: 1;
   width: 100%;
   height: 100%;
+  /* Allow the content to shrink to the card width instead of overflowing it
+     when a child (e.g. a long nowrap address) sets a large min-content. */
+  min-width: 0;
 }
