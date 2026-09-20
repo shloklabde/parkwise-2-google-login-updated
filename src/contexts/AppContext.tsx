@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { firebaseErrorMessage, firebaseService } from '@/services/firebaseServices';
 import { type Booking, type BookingStatus, type DemoUser, type NotificationItem, type ParkingLocation, type ParkingSlot, type SlotStatus } from '@/data/mock';
 import { parkingService, type FirestoreParkingLocationDoc } from '@/services/parkingService';
+import { isBookingCurrentlyActive, normalizeSlotLabel } from '@/lib/bookingTime';
 
 interface AppContextValue {
   user: DemoUser | null;
@@ -60,6 +61,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [parkingError, setParkingError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState('');
+  const [timeTick, setTimeTick] = useState(0);
+
+  // Periodically check for expired reservations, tick clock, and sync Firestore
+  useEffect(() => {
+    // Initial reconciliation
+    firebaseService.reconcileExpiredBookingsAndSlots();
+
+    const interval = setInterval(() => {
+      setTimeTick((t) => t + 1);
+      firebaseService.reconcileExpiredBookingsAndSlots();
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Real-time subscription to all bookings so that every user sees live reservation statuses
+  useEffect(() => {
+    const unsubscribeAll = firebaseService.subscribeToAllBookings(
+      (list) => {
+        setAllBookings(list);
+      },
+      (error) => {
+        console.warn('Could not subscribe to all bookings:', error);
+      },
+    );
+    return () => unsubscribeAll();
+  }, []);
 
   useEffect(() => {
     const unsubParking = parkingService.subscribeToLiveParkingData((data) => {
@@ -76,16 +104,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let unsubscribeBookings: (() => void) | undefined;
-    let unsubscribeAllBookings: (() => void) | undefined;
     const unsubscribeAuth = firebaseService.authStateChanged(
       (nextUser) => {
         unsubscribeBookings?.();
         unsubscribeBookings = undefined;
-        unsubscribeAllBookings?.();
-        unsubscribeAllBookings = undefined;
         setUser(nextUser);
         setBookings([]);
-        setAllBookings([]);
         setAuthError('');
         setAuthLoading(false);
         if (nextUser) {
@@ -95,10 +119,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             (error) => setAuthError(error.message),
           );
           if (nextUser.role === 'admin') {
-            unsubscribeAllBookings = firebaseService.subscribeToAllBookings(
-              setAllBookings,
-              (error) => setAuthError(error.message),
-            );
             firebaseService.fetchAllUsers().then(setAllUsers);
           }
         }
@@ -106,11 +126,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       (error) => {
         unsubscribeBookings?.();
         unsubscribeBookings = undefined;
-        unsubscribeAllBookings?.();
-        unsubscribeAllBookings = undefined;
         setUser(null);
         setBookings([]);
-        setAllBookings([]);
         const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
         if (code !== 'permission-denied') {
           setAuthError(error.message);
@@ -122,9 +139,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       unsubscribeAuth();
       unsubscribeBookings?.();
-      unsubscribeAllBookings?.();
     };
   }, []);
+
+  // Dynamically compute effective slots based on active reservations vs expired reservations
+  const effectiveParkingSlots = useMemo(() => {
+    const now = new Date();
+    return parkingSlots.map((slot) => {
+      // If slot is marked as 'reserved', check if there is an active reservation right now
+      if (slot.status === 'reserved') {
+        const cleanLabel = normalizeSlotLabel(slot.label);
+        const hasActiveReservation = allBookings.some((b) => {
+          const bSlot = normalizeSlotLabel(b.slotNumber || b.slot || b.slotId || '');
+          return bSlot === cleanLabel && isBookingCurrentlyActive(b, now);
+        });
+
+        // If no active reservation currently covers this exact moment, the slot is now available!
+        if (!hasActiveReservation) {
+          return { ...slot, status: 'available' as SlotStatus };
+        }
+      }
+      return slot;
+    });
+  }, [parkingSlots, allBookings, timeTick]);
+
+  // Dynamically compute effective locations using the effective parking slots
+  const effectiveParkingLocations = useMemo(() => {
+    return parkingLocations.map((loc) => {
+      const locSlots = effectiveParkingSlots.filter(
+        (s) => !s.locationId || s.locationId === loc.id || loc.id === 'metropark_001',
+      );
+      const availableCount = locSlots.filter((s) => s.status === 'available').length;
+      return {
+        ...loc,
+        slots: locSlots,
+        availableSlots: locSlots.length > 0 ? availableCount : loc.availableSlots,
+      };
+    });
+  }, [parkingLocations, effectiveParkingSlots]);
 
   const login = async (email: string, password: string) => {
     setAuthError('');
@@ -200,8 +252,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addBooking = async (booking: Omit<Booking, 'id' | 'createdAt' | 'status'>) => {
     if (!user) throw new Error('Sign in before confirming a reservation.');
     const next = await firebaseService.createBooking(user.id, booking);
+    const cleanSlotLabel = String(booking.slot || booking.slotNumber || '').replace(/^(slot_)+/i, '').trim().toUpperCase();
     const location = parkingLocations.find((item) => item.id === booking.locationId);
-    const slot = location?.slots.find((item) => item.label === booking.slot);
+    const slot = location?.slots.find((item) => item.label === cleanSlotLabel || item.id === booking.slotId);
     if (location && slot && slot.status === 'available') {
       slot.status = 'reserved';
       location.availableSlots = Math.max(0, location.availableSlots - 1);
@@ -215,8 +268,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const booking = bookings.find((item) => item.id === id);
     await firebaseService.cancelBooking(user.id, id);
     if (booking) {
+      const cleanSlotLabel = String(booking.slot || booking.slotNumber || '').replace(/^(slot_)+/i, '').trim().toUpperCase();
       const location = parkingLocations.find((item) => item.id === booking.locationId);
-      const slot = location?.slots.find((item) => item.label === booking.slot);
+      const slot = location?.slots.find((item) => item.label === cleanSlotLabel || item.id === booking.slotId);
       if (location && slot && slot.status === 'reserved') {
         slot.status = 'available';
         location.availableSlots += 1;
@@ -382,8 +436,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       bookings,
       allBookings,
       allUsers,
-      parkingLocations,
-      parkingSlots,
+      parkingLocations: effectiveParkingLocations,
+      parkingSlots: effectiveParkingSlots,
       parkingLoading,
       parkingError,
       authLoading,
@@ -417,8 +471,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       bookings,
       allBookings,
       allUsers,
-      parkingLocations,
-      parkingSlots,
+      effectiveParkingLocations,
+      effectiveParkingSlots,
       parkingLoading,
       parkingError,
       authLoading,

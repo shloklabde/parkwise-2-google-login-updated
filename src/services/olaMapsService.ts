@@ -19,8 +19,12 @@ export interface DirectionsRoute {
   warnings?: string[];
 }
 
-export const OLA_MAPS_API_KEY =
-  ((import.meta.env.VITE_OLA_MAPS_API_KEY as string) || '').trim();
+export const OLA_MAPS_API_KEY = (
+  (import.meta.env.VITE_OLA_MAPS_API_KEY as string) ||
+  'g7CLmIGs6zVCHq4wpSfnJSssLSMo3wHPCdEPyx6S'
+)
+  .trim()
+  .replace(/^["']|["']$/g, '');
 
 /**
  * Request user's current geolocation one time.

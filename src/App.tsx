@@ -8,6 +8,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AppProvider, useApp } from '@/contexts/AppContext';
 import { analyticsData, demoUsers, devices, parkingLocations, type Booking, type ParkingLocation, type ParkingSlot } from '@/data/mock';
+import { isBookingInConflict, normalizeSlotLabel } from '@/lib/bookingTime';
 import { AdminShell, AppLogo, BookingCard, EmptyState, FilterButton, MockMap, PageHeader, ParkingCard, PublicNav, QRCard, SlotMap, StatCard, StatusBadge, UserShell } from '@/components/SmartParkUI';
 import { OlaMap } from '@/components/OlaMap';
 import { getCurrentUserLocation, getOlaDirections, type DirectionsRoute } from '@/services/olaMapsService';
@@ -1013,7 +1014,7 @@ function LocationPage() {
 
 function SelectPage() {
   const { id } = useParams<{ id: string }>();
-  const { parkingLocations, addBooking, user } = useApp();
+  const { parkingLocations, addBooking, user, allBookings } = useApp();
   const [, navigate] = useLocation();
   const location = parkingLocations.find((l) => l.id === id) || parkingLocations[0];
   const [selected, setSelected] = useState<ParkingSlot | undefined>();
@@ -1047,8 +1048,30 @@ function SelectPage() {
   const pricePerHour = location?.pricePerHour || 30;
   const totalAmount = pricePerHour * duration;
 
+  // Dynamically evaluate slot availability for the selected date & time window
+  const slotsForSelection = useMemo(() => {
+    if (!location?.slots) return [];
+    return location.slots.map((slot) => {
+      // Hardware-occupied or maintenance slots are preserved
+      if (slot.status === 'occupied' || slot.status === 'maintenance') {
+        return slot;
+      }
+      const cleanLabel = normalizeSlotLabel(slot.label);
+      // Check if any non-cancelled, non-completed booking has an overlapping conflict
+      const hasConflict = allBookings.some((b) => {
+        const bSlot = normalizeSlotLabel(b.slotNumber || b.slot || b.slotId || '');
+        return bSlot === cleanLabel && isBookingInConflict(b, date, startTime, endTime);
+      });
+
+      return {
+        ...slot,
+        status: (hasConflict ? 'reserved' : 'available') as typeof slot.status,
+      };
+    });
+  }, [location?.slots, allBookings, date, startTime, endTime]);
+
   // Keep selection synchronized with real-time status changes
-  const liveSelectedSlot = selected ? location?.slots.find((s) => s.id === selected.id) : undefined;
+  const liveSelectedSlot = selected ? slotsForSelection.find((s) => s.id === selected.id) : undefined;
   const isSelectedAvailable = liveSelectedSlot?.status === 'available';
 
   if (!location) return <Redirect to="/parking" />;
@@ -1176,7 +1199,7 @@ function SelectPage() {
         </Link>
         <PageHeader eyebrow="Reservation Setup" title="Choose your space" detail="Select an available bay, choose your arrival date and time window, and confirm your reservation." />
         <div className="grid gap-5 lg:grid-cols-[1.2fr_.8fr]">
-          <SlotMap slots={location.slots} selected={liveSelectedSlot?.id} onSelect={(slot) => { setSelected(slot); setError(''); }} />
+          <SlotMap slots={slotsForSelection} selected={liveSelectedSlot?.id} onSelect={(slot) => { setSelected(slot); setError(''); }} />
           <div className="h-fit rounded-2xl border border-[#dfe7eb] bg-white p-5 lg:sticky lg:top-[90px] shadow-sm">
             <p className="text-xs font-bold uppercase tracking-[.12em] text-[#c28636]">Review Booking</p>
             <h2 className="mt-1 font-display text-xl font-bold text-[#183653]">{location.name}</h2>

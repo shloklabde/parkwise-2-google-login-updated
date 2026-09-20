@@ -21,10 +21,18 @@ import {
   setDoc,
   updateDoc,
   where,
+  type DocumentReference,
+  type DocumentSnapshot,
+  type Transaction,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { firebaseAuth, firestore } from '@/lib/firebase';
 import type { Booking, BookingStatus, DemoUser } from '@/data/mock';
+import {
+  isBookingPastEndTime,
+  isBookingCurrentlyActive,
+  normalizeSlotLabel,
+} from '@/lib/bookingTime';
 
 const userRef = (uid: string) => doc(firestore, 'users', uid);
 const allUsersRef = () => collection(firestore, 'users');
@@ -32,6 +40,33 @@ const bookingsCollectionRef = () => collection(firestore, 'bookings');
 const bookingDocRef = (id: string) => doc(firestore, 'bookings', id);
 const parkingSlotsCollectionRef = () => collection(firestore, 'ParkingSlots');
 const parkingSlotDocRef = (id: string) => doc(firestore, 'ParkingSlots', id);
+
+async function findExistingSlotInTransaction(
+  transaction: Transaction,
+  candidateSlotId?: string | null,
+  slotLabel?: string | null,
+): Promise<{ ref: DocumentReference; snap: DocumentSnapshot; label: string } | null> {
+  const cleanLabel = String(slotLabel || candidateSlotId || '').replace(/^(slot_)+/i, '').trim().toUpperCase();
+  const rawId = candidateSlotId ? String(candidateSlotId).trim() : null;
+
+  const candidateIds = [
+    rawId,
+    cleanLabel ? `slot_${cleanLabel.toLowerCase()}` : null,
+    cleanLabel ? `slot_${cleanLabel}` : null,
+    cleanLabel ? `Slot_${cleanLabel}` : null,
+    cleanLabel,
+  ].filter(Boolean) as string[];
+
+  const uniqueCandidates = Array.from(new Set(candidateIds));
+  for (const id of uniqueCandidates) {
+    const ref = parkingSlotDocRef(id);
+    const snap = await transaction.get(ref);
+    if (snap.exists()) {
+      return { ref, snap, label: cleanLabel };
+    }
+  }
+  return null;
+}
 
 const ADMIN_EMAIL = 'shloklabde60@gmail.com';
 const ADMIN_PASSWORD = 'Shlok@123';
@@ -166,15 +201,28 @@ export interface CreateBookingParams {
 }
 
 function parseBookingDoc(id: string, data: Record<string, unknown>): Booking {
-  const slotNumber = String(data.slotNumber || data.slot || 'A1');
+  const rawSlot = String(data.slotNumber || data.slot || 'A1');
+  const slotNumber = normalizeSlotLabel(rawSlot);
   const startTime = data.startTime ? String(data.startTime) : '';
   const endTime = data.endTime ? String(data.endTime) : '';
   const time = data.time ? String(data.time) : startTime && endTime ? `${startTime} - ${endTime}` : '12:00 PM';
   const rawStatus = String(data.status || 'confirmed').toLowerCase();
+  const dateStr = String(data.date || '');
+  const duration = typeof data.duration === 'number' ? data.duration : 1;
+
+  const isPast = isBookingPastEndTime({
+    date: dateStr,
+    startTime,
+    endTime,
+    time,
+    duration,
+    status: rawStatus,
+  });
+
   const status: BookingStatus =
     rawStatus === 'cancelled'
       ? 'cancelled'
-      : rawStatus === 'completed'
+      : rawStatus === 'completed' || isPast
       ? 'completed'
       : rawStatus === 'active'
       ? 'active'
@@ -193,11 +241,11 @@ function parseBookingDoc(id: string, data: Record<string, unknown>): Booking {
     slot: slotNumber,
     slotId: data.slotId ? String(data.slotId) : undefined,
     slotNumber,
-    date: String(data.date || ''),
+    date: dateStr,
     startTime: startTime || undefined,
     endTime: endTime || undefined,
     time,
-    duration: typeof data.duration === 'number' ? data.duration : 1,
+    duration,
     amount: typeof data.amount === 'number' ? data.amount : 0,
     status,
     createdAt: String(data.createdAt || new Date().toISOString()),
@@ -405,31 +453,53 @@ export const firebaseService = {
    * 4. If already reserved/occupied, throw "Sorry, this parking slot is no longer available."
    */
   async createBooking(uid: string, params: CreateBookingParams): Promise<Booking> {
-    const slotNumber = params.slotNumber || params.slot || 'A1';
-    const targetSlotId = params.slotId || `Slot_${slotNumber}`;
+    const rawNumber = params.slotNumber || params.slot || params.slotId || 'A1';
+    const slotNumber = String(rawNumber).replace(/^(slot_)+/i, '').trim().toUpperCase();
     const newBookingRef = doc(bookingsCollectionRef());
-    const slotRef = parkingSlotDocRef(targetSlotId);
     const createdAtIso = new Date().toISOString();
 
     const startTime = params.startTime || params.time?.split('-')[0]?.trim() || '10:00 AM';
     const endTime = params.endTime || params.time?.split('-')[1]?.trim() || '12:00 PM';
     const time = `${startTime} - ${endTime}`;
 
+    let savedSlotDocId = params.slotId || `slot_${slotNumber}`;
+
     try {
       await runTransaction(firestore, async (transaction) => {
-        const slotSnap = await transaction.get(slotRef);
-        
-        if (slotSnap.exists()) {
-          const slotData = slotSnap.data();
-          const currentStatus = String(slotData.status || '').toLowerCase().trim();
-          if (currentStatus !== 'available') {
+        const resolvedSlot = await findExistingSlotInTransaction(
+          transaction,
+          params.slotId,
+          slotNumber,
+        );
+
+        if (resolvedSlot) {
+          savedSlotDocId = resolvedSlot.ref.id;
+          const slotData = resolvedSlot.snap.data() as Record<string, unknown> | undefined;
+          const currentStatus = String(slotData?.status || '').toLowerCase().trim();
+
+          // Check if slot was previously marked reserved, but that reservation has expired
+          let isSlotAvailable = currentStatus === 'available';
+          if (currentStatus === 'reserved') {
+            const resDate = (slotData?.reservationDate || slotData?.date) as string | undefined;
+            const resEnd = (slotData?.reservationEndTime || slotData?.endTime || slotData?.time) as string | undefined;
+            if (resDate && isBookingPastEndTime({ date: resDate, endTime: resEnd })) {
+              isSlotAvailable = true;
+            }
+          }
+
+          if (!isSlotAvailable) {
             throw new Error('Sorry, this parking slot is no longer available.');
           }
-          transaction.update(slotRef, {
+
+          transaction.update(resolvedSlot.ref, {
             status: 'reserved',
             reservedBy: uid,
             reservedAt: serverTimestamp(),
             lastUpdated: serverTimestamp(),
+            reservationDate: params.date,
+            reservationStartTime: startTime,
+            reservationEndTime: endTime,
+            activeBookingId: newBookingRef.id,
           });
         }
 
@@ -438,7 +508,7 @@ export const firebaseService = {
           locationId: params.locationId,
           locationName: params.locationName,
           address: params.address || '',
-          slotId: targetSlotId,
+          slotId: savedSlotDocId,
           slotNumber: slotNumber,
           slot: slotNumber,
           date: params.date,
@@ -459,7 +529,7 @@ export const firebaseService = {
         locationId: params.locationId,
         locationName: params.locationName,
         address: params.address,
-        slotId: targetSlotId,
+        slotId: savedSlotDocId,
         slotNumber: slotNumber,
         slot: slotNumber,
         date: params.date,
@@ -514,12 +584,11 @@ export const firebaseService = {
           return; // Already cancelled
         }
 
-        const slotId = data.slotId || (data.slotNumber ? `Slot_${data.slotNumber}` : data.slot ? `Slot_${data.slot}` : null);
-        const slotRef = slotId ? parkingSlotDocRef(slotId) : null;
-        let slotSnap: { exists: () => boolean; data: () => Record<string, unknown> } | null = null;
-        if (slotRef) {
-          slotSnap = (await transaction.get(slotRef)) as { exists: () => boolean; data: () => Record<string, unknown> };
-        }
+        const resolvedSlot = await findExistingSlotInTransaction(
+          transaction,
+          data.slotId,
+          data.slotNumber || data.slot,
+        );
 
         // --- STEP 2: ALL WRITES AFTER ---
         transaction.update(bookingRef, {
@@ -528,13 +597,18 @@ export const firebaseService = {
           updatedAt: serverTimestamp(),
         });
 
-        if (slotRef && slotSnap && slotSnap.exists()) {
-          const slotData = slotSnap.data();
-          const slotStatus = String(slotData.status || '').toLowerCase().trim();
+        if (resolvedSlot) {
+          const slotData = resolvedSlot.snap.data() as Record<string, unknown> | undefined;
+          const slotStatus = String(slotData?.status || '').toLowerCase().trim();
           if (slotStatus === 'reserved') {
-            transaction.update(slotRef, {
+            transaction.update(resolvedSlot.ref, {
               status: 'available',
               reservedBy: null,
+              reservedAt: null,
+              reservationDate: null,
+              reservationStartTime: null,
+              reservationEndTime: null,
+              activeBookingId: null,
               lastUpdated: serverTimestamp(),
             });
           }
@@ -555,24 +629,31 @@ export const firebaseService = {
         if (!bookingSnap.exists()) return;
         const data = bookingSnap.data();
 
-        const slotId = data.slotId || (data.slotNumber ? `Slot_${data.slotNumber}` : data.slot ? `Slot_${data.slot}` : null);
-        const slotRef = (status === 'cancelled' || status === 'completed') && slotId ? parkingSlotDocRef(slotId) : null;
-        let slotSnap: { exists: () => boolean; data: () => Record<string, unknown> } | null = null;
-        if (slotRef) {
-          slotSnap = (await transaction.get(slotRef)) as { exists: () => boolean; data: () => Record<string, unknown> };
+        let resolvedSlot: { ref: DocumentReference; snap: DocumentSnapshot; label: string } | null = null;
+        if (status === 'cancelled' || status === 'completed') {
+          resolvedSlot = await findExistingSlotInTransaction(
+            transaction,
+            data.slotId,
+            data.slotNumber || data.slot,
+          );
         }
 
         // --- STEP 2: ALL WRITES AFTER ---
         transaction.update(bookingRef, { status, updatedAt: serverTimestamp() });
 
         // If completing or cancelling, free up the reserved slot
-        if (slotRef && slotSnap && slotSnap.exists()) {
-          const slotData = slotSnap.data();
-          const currentStatus = String(slotData.status || '').toLowerCase().trim();
+        if (resolvedSlot) {
+          const slotData = resolvedSlot.snap.data() as Record<string, unknown> | undefined;
+          const currentStatus = String(slotData?.status || '').toLowerCase().trim();
           if (currentStatus === 'reserved') {
-            transaction.update(slotRef, {
+            transaction.update(resolvedSlot.ref, {
               status: 'available',
               reservedBy: null,
+              reservedAt: null,
+              reservationDate: null,
+              reservationStartTime: null,
+              reservationEndTime: null,
+              activeBookingId: null,
               lastUpdated: serverTimestamp(),
             });
           }
@@ -581,6 +662,87 @@ export const firebaseService = {
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `bookings/${id}`);
       throw error;
+    }
+  },
+
+  /**
+   * Reconciles expired bookings and releases their slots back to 'available' in Firestore.
+   * e.g., if a booking was for 21 Sept 6:00 AM - 8:00 AM, and it is now 9:00 AM,
+   * this marks the booking as 'completed' and resets the slot to 'available'.
+   */
+  async reconcileExpiredBookingsAndSlots(): Promise<{ completedCount: number; freedSlotCount: number }> {
+    try {
+      const snap = await getDocs(bookingsCollectionRef());
+      const now = new Date();
+
+      const activeOrUpcomingDocs: { id: string; data: Record<string, unknown>; booking: Booking }[] = [];
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        const booking = parseBookingDoc(docSnap.id, data);
+        const rawStatus = String(data.status || 'confirmed').toLowerCase();
+        if (rawStatus !== 'completed' && rawStatus !== 'cancelled') {
+          activeOrUpcomingDocs.push({ id: docSnap.id, data, booking });
+        }
+      });
+
+      let completedCount = 0;
+      let freedSlotCount = 0;
+
+      const expired = activeOrUpcomingDocs.filter(({ booking }) => isBookingPastEndTime(booking, now));
+      const nonExpired = activeOrUpcomingDocs.filter(({ booking }) => !isBookingPastEndTime(booking, now));
+
+      for (const { id } of expired) {
+        try {
+          await updateDoc(bookingDocRef(id), {
+            status: 'completed',
+            completedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          completedCount++;
+        } catch (err) {
+          console.warn(`Could not mark booking ${id} as completed:`, err);
+        }
+      }
+
+      // Check all parking slots in Firestore to see if any are stuck in 'reserved'
+      const slotsSnap = await getDocs(parkingSlotsCollectionRef());
+      for (const slotDoc of slotsSnap.docs) {
+        const slotData = slotDoc.data();
+        const status = String(slotData.status || '').toLowerCase().trim();
+        if (status === 'reserved') {
+          const rawNumber = slotData.slotNumber || slotData.SlotNumber || slotData.slot || slotDoc.id;
+          const slotLabel = normalizeSlotLabel(String(rawNumber));
+
+          // Check if there is ANY non-expired booking currently active for this slot
+          const hasActiveReservationNow = nonExpired.some(({ booking }) => {
+            const bSlot = normalizeSlotLabel(booking.slotNumber || booking.slot || booking.slotId || '');
+            return bSlot === slotLabel && isBookingCurrentlyActive(booking, now);
+          });
+
+          if (!hasActiveReservationNow) {
+            try {
+              await updateDoc(slotDoc.ref, {
+                status: 'available',
+                reservedBy: null,
+                reservedAt: null,
+                reservationDate: null,
+                reservationStartTime: null,
+                reservationEndTime: null,
+                activeBookingId: null,
+                lastUpdated: serverTimestamp(),
+              });
+              freedSlotCount++;
+            } catch (err) {
+              console.warn(`Could not update slot ${slotDoc.id} to available:`, err);
+            }
+          }
+        }
+      }
+
+      return { completedCount, freedSlotCount };
+    } catch (err) {
+      console.warn('reconcileExpiredBookingsAndSlots failed:', err);
+      return { completedCount: 0, freedSlotCount: 0 };
     }
   },
 

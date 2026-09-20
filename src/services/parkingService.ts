@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   getDocs,
   addDoc,
@@ -8,11 +9,13 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
+  type DocumentReference,
   type Unsubscribe,
   type FirestoreError,
 } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import type { ParkingLocation, ParkingSlot, SlotStatus } from '@/data/mock';
+import { isBookingPastEndTime, normalizeSlotLabel } from '@/lib/bookingTime';
 
 export type { ParkingLocation, ParkingSlot, SlotStatus };
 
@@ -114,9 +117,38 @@ function formatRelativeTime(val?: unknown): string {
 }
 
 export function parseParkingSlotDoc(id: string, data: FirestoreParkingSlotDoc): ParkingSlot {
-  const label = data.slotNumber || data.slot || id.replace(/^Slot_/i, '');
-  const status = normalizeSlotStatus(data.status);
-  const sensorId = data.sensor || data.sensorId || `ESP32-${label}`;
+  const rawNumber =
+    data.slotNumber ||
+    (data as Record<string, unknown>).SlotNumber ||
+    data.slot ||
+    (data as Record<string, unknown>).Slot ||
+    id;
+  // Always strip any repetitive 'slot_' or 'Slot_' prefixes and uppercase, e.g. "slot_A1" -> "A1"
+  const label = normalizeSlotLabel(String(rawNumber));
+  let status = normalizeSlotStatus(data.status);
+
+  // If slot is marked 'reserved', check if the reservation time window on this slot document has expired
+  if (status === 'reserved') {
+    const resDate = (data.reservationDate || data.date) as string | undefined;
+    const resEndTime = (data.reservationEndTime || data.endTime || data.time) as string | undefined;
+    if (resDate) {
+      const isPast = isBookingPastEndTime({
+        date: resDate,
+        endTime: resEndTime,
+      });
+      if (isPast) {
+        status = 'available';
+      }
+    }
+  }
+
+  const sensorId = String(
+    data.sensor ||
+      data.sensorId ||
+      (data as Record<string, unknown>).sensorID ||
+      (data as Record<string, unknown>).SensorID ||
+      `ESP32-${label}`,
+  );
   const floor = data.floor || (label.startsWith('B') ? 'P2' : 'P1');
   const lastUpdated = formatRelativeTime(data.lastUpdated);
 
@@ -127,7 +159,7 @@ export function parseParkingSlotDoc(id: string, data: FirestoreParkingSlotDoc): 
     floor,
     sensorId,
     lastUpdated,
-    locationId: data.locationId || 'metropark_001',
+    locationId: String(data.locationId || (data as Record<string, unknown>).locationID || 'metropark_001'),
   };
 }
 
@@ -204,12 +236,28 @@ export const parkingService = {
     return onSnapshot(
       slotsCol,
       (snapshot) => {
-        const slots: ParkingSlot[] = snapshot.docs.map((docSnap) => {
+        const rawSlots: ParkingSlot[] = snapshot.docs.map((docSnap) => {
           const data = docSnap.data() as FirestoreParkingSlotDoc;
           return parseParkingSlotDoc(docSnap.id, data);
         });
 
-        // Sort slots naturally (Slot_A1, Slot_A2, Slot_A3, Slot_A4...)
+        // De-duplicate by slot label (e.g. A1, A2, A3, A4) so phantom or duplicate documents never render multiple bays
+        const slotMap = new Map<string, ParkingSlot>();
+        for (const slot of rawSlots) {
+          const existing = slotMap.get(slot.label);
+          if (!existing) {
+            slotMap.set(slot.label, slot);
+          } else {
+            // If the existing doc has repetitive prefixes like slot_slot_, prefer the cleaner ID
+            const isExistingMessy = existing.id.toLowerCase().includes('slot_slot_') || existing.id.length > slot.id.length;
+            if (isExistingMessy) {
+              slotMap.set(slot.label, slot);
+            }
+          }
+        }
+        const slots = Array.from(slotMap.values());
+
+        // Sort slots naturally (A1, A2, A3, A4...)
         slots.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' }));
         callback(slots);
       },
@@ -339,16 +387,39 @@ export const parkingService = {
    * Testing manual status change: 'available' | 'occupied' | 'reserved' | 'maintenance'
    */
   async updateSlotStatus(slotId: string, status: SlotStatus): Promise<void> {
-    const targetId = slotId.startsWith('Slot_') ? slotId : `Slot_${slotId}`;
-    const slotRef = doc(firestore, PARKING_SLOTS_COLLECTION, targetId);
-    await setDoc(
-      slotRef,
-      {
-        status,
-        lastUpdated: serverTimestamp(),
-      },
-      { merge: true },
-    );
+    const cleanLabel = slotId.replace(/^(slot_)+/i, '').trim().toUpperCase();
+    const candidateIds = [
+      slotId,
+      `slot_${cleanLabel}`,
+      `slot_${cleanLabel.toLowerCase()}`,
+      `Slot_${cleanLabel}`,
+      cleanLabel,
+    ].filter(Boolean);
+
+    let targetRef: DocumentReference | null = null;
+    for (const cid of Array.from(new Set(candidateIds))) {
+      const candidateRef = doc(firestore, PARKING_SLOTS_COLLECTION, cid);
+      const snap = await getDoc(candidateRef);
+      if (snap.exists()) {
+        targetRef = candidateRef;
+        break;
+      }
+    }
+
+    if (!targetRef) {
+      targetRef = doc(firestore, PARKING_SLOTS_COLLECTION, slotId);
+    }
+
+    const updates: Record<string, unknown> = {
+      status,
+      lastUpdated: serverTimestamp(),
+    };
+    if (status === 'available') {
+      updates.reservedBy = null;
+      updates.reservedAt = null;
+    }
+
+    await setDoc(targetRef, updates, { merge: true });
   },
 
   /**
@@ -361,8 +432,8 @@ export const parkingService = {
     status?: SlotStatus;
     floor?: string;
   }): Promise<string> {
-    const cleanNumber = data.slotNumber.trim().toUpperCase();
-    const docId = `Slot_${cleanNumber}`;
+    const cleanNumber = data.slotNumber.replace(/^(slot_)+/i, '').trim().toUpperCase();
+    const docId = `slot_${cleanNumber}`;
     const slotRef = doc(firestore, PARKING_SLOTS_COLLECTION, docId);
     await setDoc(
       slotRef,
@@ -385,9 +456,23 @@ export const parkingService = {
    * Delete a slot document from Firestore ParkingSlots collection
    */
   async deleteParkingSlot(slotId: string): Promise<void> {
-    const targetId = slotId.startsWith('Slot_') ? slotId : `Slot_${slotId}`;
-    const slotRef = doc(firestore, PARKING_SLOTS_COLLECTION, targetId);
-    await deleteDoc(slotRef);
+    const cleanLabel = slotId.replace(/^(slot_)+/i, '').trim().toUpperCase();
+    const candidateIds = [
+      slotId,
+      `slot_${cleanLabel}`,
+      `slot_${cleanLabel.toLowerCase()}`,
+      `Slot_${cleanLabel}`,
+      cleanLabel,
+    ].filter(Boolean);
+
+    for (const cid of Array.from(new Set(candidateIds))) {
+      const candidateRef = doc(firestore, PARKING_SLOTS_COLLECTION, cid);
+      const snap = await getDoc(candidateRef);
+      if (snap.exists()) {
+        await deleteDoc(candidateRef);
+        return;
+      }
+    }
   },
 
   /**

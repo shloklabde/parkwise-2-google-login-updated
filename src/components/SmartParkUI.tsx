@@ -359,7 +359,67 @@ const statusMeta: Record<SlotStatus, { label: string; className: string }> = {
 };
 
 export function SlotMap({ slots, selected, onSelect }: { slots: ParkingSlot[]; selected?: string; onSelect?: (slot: ParkingSlot) => void }) {
-  return <div data-testid="parking-slot-map" className="overflow-x-auto rounded-2xl border border-[#dfe7eb] bg-[#f2f5f5] p-4 sm:p-6"><div className="mx-auto mb-5 max-w-[420px] rounded-lg border border-dashed border-[#9fbab9] bg-[#e1efed] py-2 text-center text-[10px] font-bold uppercase tracking-[.18em] text-[#56837e]">Entry / exit</div><div className="mx-auto grid min-w-[350px] max-w-[560px] grid-cols-6 gap-2 sm:gap-3">{slots.map((slot) => { const meta = statusMeta[slot.status]; const isSelected = selected === slot.id; const canSelect = slot.status === 'available'; return <button key={slot.id} disabled={!canSelect} onClick={() => onSelect?.(slot)} data-testid={`slot-${slot.id}`} aria-label={`${slot.label}, ${meta.label}`} className={`relative flex aspect-[.65] min-h-16 flex-col items-center justify-center rounded-xl border-2 text-[11px] font-bold transition-all ${isSelected ? 'border-[#e2a849] bg-[#fff0cc] text-[#805619] shadow-[0_0_0_3px_rgba(226,168,73,.18)]' : meta.className} ${canSelect ? 'cursor-pointer hover:-translate-y-0.5' : 'cursor-not-allowed opacity-80'}`}><Car size={16} className="mb-1 opacity-70" /><span>{slot.label}</span>{isSelected && <span className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-[#e2a849] text-white"><Check size={10} /></span>}</button>; })}</div><div className="mt-6 flex flex-wrap justify-center gap-x-5 gap-y-2 border-t border-[#dfe7eb] pt-4 text-[10px] font-semibold text-[#71818b]">{Object.entries(statusMeta).map(([key, value]) => <span key={key} className="flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-sm border ${value.className}`} />{value.label}</span>)}</div></div>;
+  // De-duplicate by canonical slot label (e.g. A1, A2, A3, A4) so phantom or duplicate documents never render multiple bays
+  const uniqueSlots = Array.from(
+    slots.reduce((map, slot) => {
+      const cleanLabel = slot.label.replace(/^(slot_)+/i, '').trim().toUpperCase();
+      const existing = map.get(cleanLabel);
+      if (!existing) {
+        map.set(cleanLabel, { ...slot, label: cleanLabel });
+      } else {
+        // If current slot doc has cleaner ID than existing, use it
+        if (existing.id.toLowerCase().includes('slot_slot_') || existing.id.length > slot.id.length) {
+          map.set(cleanLabel, { ...slot, label: cleanLabel });
+        }
+      }
+      return map;
+    }, new Map<string, ParkingSlot>()).values()
+  ).sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' }));
+
+  return (
+    <div data-testid="parking-slot-map" className="overflow-x-auto rounded-2xl border border-[#dfe7eb] bg-[#f2f5f5] p-4 sm:p-6">
+      <div className="mx-auto mb-5 max-w-[420px] rounded-lg border border-dashed border-[#9fbab9] bg-[#e1efed] py-2 text-center text-[10px] font-bold uppercase tracking-[.18em] text-[#56837e]">
+        Entry / exit
+      </div>
+      <div className="mx-auto grid min-w-[350px] max-w-[560px] grid-cols-4 gap-2 sm:gap-3 sm:grid-cols-6">
+        {uniqueSlots.map((slot) => {
+          const meta = statusMeta[slot.status];
+          const isSelected = selected === slot.id || selected === slot.label;
+          const canSelect = slot.status === 'available';
+          return (
+            <button
+              key={slot.id}
+              disabled={!canSelect}
+              onClick={() => onSelect?.(slot)}
+              data-testid={`slot-${slot.id}`}
+              aria-label={`${slot.label}, ${meta.label}`}
+              className={`relative flex aspect-[.65] min-h-16 flex-col items-center justify-center rounded-xl border-2 text-[11px] font-bold transition-all ${
+                isSelected
+                  ? 'border-[#e2a849] bg-[#fff0cc] text-[#805619] shadow-[0_0_0_3px_rgba(226,168,73,.18)]'
+                  : meta.className
+              } ${canSelect ? 'cursor-pointer hover:-translate-y-0.5' : 'cursor-not-allowed opacity-80'}`}
+            >
+              <Car size={16} className="mb-1 opacity-70" />
+              <span>{slot.label}</span>
+              {isSelected && (
+                <span className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-[#e2a849] text-white">
+                  <Check size={10} />
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-6 flex flex-wrap justify-center gap-x-5 gap-y-2 border-t border-[#dfe7eb] pt-4 text-[10px] font-semibold text-[#71818b]">
+        {Object.entries(statusMeta).map(([key, value]) => (
+          <span key={key} className="flex items-center gap-1.5">
+            <span className={`h-2.5 w-2.5 rounded-sm border ${value.className}`} />
+            {value.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function BookingCard({ booking, onCancel }: { booking: Booking; onCancel?: (id: string) => void }) {

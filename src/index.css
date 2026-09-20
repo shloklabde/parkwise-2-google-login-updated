@@ -148,3 +148,16 @@
 .animate-delay-2 { animation-delay: .16s; }
 .animate-delay-3 { animation-delay: .24s; }
 .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+/* Leaflet Custom Marker & Canvas styling */
+.leaflet-div-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.leaflet-container {
+  font-family: inherit;
+  width: 100%;
+  height: 100%;
+  background-color: #f8fafc;
+}
